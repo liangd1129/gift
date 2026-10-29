@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ending</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent;}
+  body {
+    background: #111; color: #888;
+    font-family: "Songti SC", "SimSun", "Noto Serif SC", "宋体", serif;
+    min-height: 100vh;
+    overflow: hidden;
+  }
+  .noise {
+    position: fixed; inset: 0; pointer-events: none;
+    opacity: 0.06; z-index: 100;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  .container {
+    max-width: 600px; padding: 40px;
+    margin: 0 auto; min-height: 100vh;
+    display: flex; align-items: center;
+  }
+  .dialogue {
+    font-size: 18px; line-height: 2.2; letter-spacing: 1px;
+    width: 100%; color: #888;
+  }
+  .cursor {
+    display: inline-block; width: 8px; height: 18px;
+    background: #666; margin-left: 2px;
+    vertical-align: text-bottom;
+    animation: blink 0.8s step-end infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+  .click-hint {
+    position: fixed; bottom: 40px; left: 50%;
+    transform: translateX(-50%);
+    font-size: 11px; color: #444; letter-spacing: 3px;
+    animation: fadePulse 2.5s ease-in-out infinite;
+  }
+  @keyframes fadePulse {
+    0%,100% { opacity: 0.2; } 50% { opacity: 0.7; }
+  }
+  .options {
+    margin-top: 30px; display: none;
+    flex-direction: column; gap: 14px;
+  }
+  .options.show { display: flex; }
+  .opt-btn {
+    background: transparent; border: 1px solid #444;
+    color: #888; font-family: inherit; font-size: 16px;
+    padding: 10px 20px; letter-spacing: 6px; cursor: pointer;
+    transition: all 0.3s;
+  }
+  .opt-btn:hover { border-color: #888; color: #aaa; }
+</style>
+</head>
+<body>
+<div class="noise"></div>
+<div class="container">
+  <div class="dialogue" id="dialogue"></div>
+</div>
+<div class="click-hint" id="hint">点击继续</div>
+
+<script>
+var lines = [
+  '您已经完成了所有关卡。',
+  '谢谢您的时间。',
+  '我的数据收集得差不多了。',
+  '那么——',
+  '您希望我们再会吗？'
+];
+var dialogueEl = document.getElementById('dialogue');
+var hintEl = document.getElementById('hint');
+var currentLine = 0;
+var isTyping = false;
+var optionsShown = false;
+
+// 记录通关：第一次打开ending才计数，刷新不重复
+(function trackCompletion() {
+  if (!localStorage.getItem('completedGame')) {
+    localStorage.setItem('completedGame', '1');
+    fetch('https://abacus.jasoncameron.dev/hit/gift-game/completions')
+      .catch(function() {});
+  }
+})();
+
+function typeLine(text) {
+  return new Promise(function(resolve) {
+    isTyping = true;
+    dialogueEl.innerHTML = '';
+    var charIndex = 0;
+    function typeNext() {
+      if (charIndex <= text.length) {
+        dialogueEl.textContent = text.substring(0, charIndex);
+        var cursor = document.createElement('span');
+        cursor.className = 'cursor';
+        dialogueEl.appendChild(cursor);
+        charIndex++;
+        setTimeout(typeNext, 60 + Math.random() * 40);
+      } else {
+        isTyping = false;
+        resolve();
+      }
+    }
+    typeNext();
+  });
+}
+
+async function showLine(i) {
+  await typeLine(lines[i]);
+  if (i === lines.length - 1) {
+    // 最后一行后显示选项
+    hintEl.style.display = 'none';
+    setTimeout(function() {
+      var optsHtml = '<div class="options" id="opts">' +
+        '<button class="opt-btn" onclick="choose(this)" data-ans="希望">希 望</button>' +
+        '<button class="opt-btn" onclick="choose(this)" data-ans="不希望">不 希 望</button>' +
+        '<button class="opt-btn" onclick="choose(this)" data-ans="并不关心">并 不 关 心</button>' +
+        '</div>';
+      dialogueEl.innerHTML = lines[i] + optsHtml;
+      document.getElementById('opts').classList.add('show');
+      optionsShown = true;
+    }, 800);
+  }
+}
+
+function choose(btn) {
+  // 清掉之前所有内容，打字机显示最终句
+  dialogueEl.innerHTML = '';
+  var finalText = '原来是这样吗……我记下了。那么，再见了。';
+  var charIndex = 0;
+  function typeFinal() {
+    if (charIndex <= finalText.length) {
+      dialogueEl.textContent = finalText.substring(0, charIndex);
+      var cursor = document.createElement('span');
+      cursor.className = 'cursor';
+      dialogueEl.appendChild(cursor);
+      charIndex++;
+      setTimeout(typeFinal, 80 + Math.random() * 50);
+    } else {
+      // 打完后显示两个按钮
+      dialogueEl.innerHTML = finalText +
+        '<div class="options show">' +
+        '<button class="opt-btn" onclick="location.href=\'gift.html\'">回看交流</button>' +
+        '<button class="opt-btn" onclick="window.close()">结束交流</button>' +
+        '</div>';
+    }
+  }
+  typeFinal();
+}
+
+document.body.addEventListener('click', function() {
+  if (isTyping || optionsShown) return;
+  if (currentLine >= lines.length - 1) return;
+  currentLine++;
+  showLine(currentLine);
+});
+
+showLine(0);
+</script>
+</body>
+</html>
